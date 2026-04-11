@@ -1,6 +1,5 @@
 # 🏋️ FITNESS BUDDY
 ### Your Personal Home Workout Coach
-**Team: Rohan, Arhaan & Dhruv**
 
 ---
 
