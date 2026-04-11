@@ -2,7 +2,7 @@
 ╔══════════════════════════════════════════╗
 ║         FITNESS BUDDY  🏋️               ║
 ║   Your Personal Home Workout Coach      ║
-║   Team: Rohan, Arhaan & Dhruv           ║
+║            ║
 ╚══════════════════════════════════════════╝
 
 No gym needed. No trainer needed. Just you, your camera, and FitnessBuddy!
