@@ -104,4 +104,3 @@ python fitness_buddy.py
 
 ---
 
-*Built for Interpersonal Skills course presentation. Inspired by Rohan's original curl counter project.*
