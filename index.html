@@ -1,0 +1,1050 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Fitness Buddy — Live Workout Tracker</title>
+  <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,700;1,400&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet"/>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #080808;
+      --surface: #101010;
+      --card: #141414;
+      --border: #1e1e1e;
+      --accent: #c8ff00;
+      --danger: #ff4040;
+      --info: #00d4ff;
+      --warn: #ffaa00;
+      --text: #f2f2f2;
+      --muted: #666;
+      --font-display: 'Black Han Sans', sans-serif;
+      --font-body: 'DM Sans', sans-serif;
+      --font-mono: 'Space Mono', monospace;
+    }
+    html, body { height: 100%; overflow: hidden; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-body);
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── SPLASH SCREEN ── */
+    #splash {
+      position: fixed; inset: 0; z-index: 1000;
+      background: var(--bg);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 1.5rem;
+      transition: opacity .5s ease;
+    }
+    #splash.hidden { opacity: 0; pointer-events: none; }
+    .splash-logo {
+      font-family: var(--font-display);
+      font-size: 3.5rem;
+      color: var(--accent);
+      letter-spacing: 3px;
+      text-align: center;
+    }
+    .splash-sub {
+      font-family: var(--font-mono);
+      font-size: .75rem;
+      color: var(--muted);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+    .splash-btn {
+      margin-top: 1rem;
+      font-family: var(--font-mono);
+      font-size: .9rem;
+      background: var(--accent);
+      color: #000;
+      border: none;
+      padding: 1rem 2.5rem;
+      cursor: pointer;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      transition: transform .15s, box-shadow .15s;
+    }
+    .splash-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(200,255,0,.4); }
+    .splash-features {
+      display: flex; gap: 2rem; flex-wrap: wrap; justify-content: center;
+      margin-top: .5rem;
+    }
+    .splash-feat {
+      font-family: var(--font-mono);
+      font-size: .7rem;
+      color: var(--muted);
+      text-align: center;
+    }
+    .splash-feat span { display: block; font-size: 1.5rem; margin-bottom: .3rem; }
+
+    /* ── MAIN APP LAYOUT ── */
+    #app {
+      display: none;
+      flex: 1;
+      grid-template-columns: 280px 1fr 220px;
+      grid-template-rows: 48px 1fr;
+      height: 100vh;
+      overflow: hidden;
+    }
+    #app.active {
+      display: grid;
+    }
+
+    /* ── TOP BAR ── */
+    .topbar {
+      grid-column: 1 / -1;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 1.5rem;
+    }
+    .topbar-logo {
+      font-family: var(--font-display);
+      font-size: 1.1rem;
+      color: var(--accent);
+      letter-spacing: 2px;
+    }
+    .topbar-center {
+      display: flex; align-items: center; gap: 1.5rem;
+    }
+    .live-dot {
+      width: 8px; height: 8px;
+      background: var(--danger);
+      border-radius: 50%;
+      animation: blink 1s infinite;
+    }
+    @keyframes blink { 0%,100%{opacity:1}50%{opacity:.2} }
+    .live-label {
+      font-family: var(--font-mono);
+      font-size: .65rem;
+      color: var(--danger);
+      text-transform: uppercase;
+      letter-spacing: 2px;
+    }
+    #timer {
+      font-family: var(--font-mono);
+      font-size: .85rem;
+      color: var(--muted);
+    }
+    .topbar-right { display: flex; align-items: center; gap: 1rem; }
+    #fps-display {
+      font-family: var(--font-mono);
+      font-size: .65rem;
+      color: var(--muted);
+    }
+
+    /* ── LEFT PANEL ── */
+    .left-panel {
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      overflow: hidden;
+    }
+
+    .panel-section {
+      padding: 1rem 1.2rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .panel-label {
+      font-family: var(--font-mono);
+      font-size: .6rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      margin-bottom: .8rem;
+    }
+
+    /* Exercise selector */
+    .exercise-btns { display: flex; flex-direction: column; gap: .4rem; }
+    .ex-btn {
+      background: var(--card);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: .7rem 1rem;
+      font-family: var(--font-mono);
+      font-size: .72rem;
+      text-align: left;
+      cursor: pointer;
+      transition: all .2s;
+      display: flex; align-items: center; gap: .6rem;
+    }
+    .ex-btn:hover { border-color: var(--accent); color: var(--text); }
+    .ex-btn.active {
+      background: rgba(200,255,0,.08);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .ex-btn .ex-icon { font-size: 1.1rem; }
+
+    /* Rep counter */
+    .rep-display {
+      text-align: center;
+      padding: 1.2rem 0;
+    }
+    .rep-number {
+      font-family: var(--font-display);
+      font-size: 5rem;
+      color: var(--text);
+      line-height: 1;
+      display: block;
+    }
+    .rep-unit {
+      font-family: var(--font-mono);
+      font-size: .65rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 2px;
+    }
+
+    /* Stage indicator */
+    .stage-display {
+      display: flex; gap: .5rem;
+    }
+    .stage-pill {
+      flex: 1;
+      padding: .4rem;
+      text-align: center;
+      font-family: var(--font-mono);
+      font-size: .6rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      transition: all .3s;
+    }
+    .stage-pill.active {
+      background: rgba(200,255,0,.1);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    /* Angle meters */
+    .angle-meters { display: flex; flex-direction: column; gap: .6rem; }
+    .angle-row {
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .angle-name {
+      font-family: var(--font-mono);
+      font-size: .62rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      width: 60px;
+    }
+    .angle-bar-wrap {
+      flex: 1; height: 4px;
+      background: var(--border);
+      margin: 0 .6rem;
+    }
+    .angle-bar {
+      height: 100%;
+      background: var(--accent);
+      transition: width .1s ease;
+      width: 0%;
+    }
+    .angle-val {
+      font-family: var(--font-mono);
+      font-size: .65rem;
+      color: var(--info);
+      width: 36px;
+      text-align: right;
+    }
+
+    /* Reset btn */
+    .reset-btn {
+      margin: .8rem 1.2rem;
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: .6rem;
+      font-family: var(--font-mono);
+      font-size: .68rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      cursor: pointer;
+      transition: all .2s;
+      width: calc(100% - 2.4rem);
+    }
+    .reset-btn:hover { border-color: var(--danger); color: var(--danger); }
+
+    /* ── CAMERA AREA ── */
+    .camera-wrap {
+      position: relative;
+      background: #000;
+      overflow: hidden;
+      display: flex; align-items: center; justify-content: center;
+    }
+    #video { display: none; }
+    #canvas {
+      width: 100%; height: 100%;
+      object-fit: cover;
+      transform: scaleX(-1);
+    }
+
+    /* Alert overlay */
+    #alert-overlay {
+      position: absolute;
+      bottom: 1.5rem; left: 50%;
+      transform: translateX(-50%);
+      display: flex; flex-direction: column; align-items: center; gap: .5rem;
+      pointer-events: none;
+      width: 90%;
+    }
+    .alert-pill {
+      background: rgba(255,64,64,.15);
+      border: 1px solid rgba(255,64,64,.4);
+      color: var(--danger);
+      font-family: var(--font-mono);
+      font-size: .75rem;
+      padding: .5rem 1.2rem;
+      text-align: center;
+      animation: alertPop .3s ease;
+      backdrop-filter: blur(8px);
+    }
+    @keyframes alertPop {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Big rep flash */
+    #rep-flash {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%,-50%);
+      font-family: var(--font-display);
+      font-size: 8rem;
+      color: var(--accent);
+      pointer-events: none;
+      opacity: 0;
+      text-shadow: 0 0 60px rgba(200,255,0,.6);
+    }
+    #rep-flash.flash {
+      animation: repFlash .6s ease forwards;
+    }
+    @keyframes repFlash {
+      0% { opacity: 1; transform: translate(-50%,-50%) scale(1.3); }
+      100% { opacity: 0; transform: translate(-50%,-50%) scale(.8); }
+    }
+
+    /* Camera loading */
+    #cam-loading {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 1rem;
+      background: var(--bg);
+    }
+    .loading-ring {
+      width: 48px; height: 48px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #cam-loading p {
+      font-family: var(--font-mono);
+      font-size: .75rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 2px;
+    }
+
+    /* ── RIGHT PANEL ── */
+    .right-panel {
+      background: var(--surface);
+      border-left: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+
+    /* Session stats */
+    .stat-block {
+      padding: 1rem 1.2rem;
+      border-bottom: 1px solid var(--border);
+      text-align: center;
+    }
+    .stat-big {
+      font-family: var(--font-display);
+      font-size: 2.2rem;
+      color: var(--accent);
+      line-height: 1;
+      display: block;
+    }
+    .stat-lbl {
+      font-family: var(--font-mono);
+      font-size: .58rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      display: block;
+      margin-top: .2rem;
+    }
+
+    /* Form rules */
+    .rules-list { padding: .8rem 1.2rem; }
+    .rule-item {
+      font-family: var(--font-mono);
+      font-size: .62rem;
+      color: var(--muted);
+      padding: .45rem 0;
+      border-bottom: 1px solid var(--border);
+      line-height: 1.5;
+      display: flex; gap: .4rem;
+    }
+    .rule-item:last-child { border-bottom: none; }
+    .rule-ok { color: var(--accent); flex-shrink: 0; }
+    .rule-warn { color: var(--warn); flex-shrink: 0; }
+
+    /* Camera tips */
+    .tips { padding: .8rem 1.2rem; }
+    .tip-item {
+      font-family: var(--font-mono);
+      font-size: .6rem;
+      color: var(--muted);
+      padding: .3rem 0;
+      display: flex; gap: .4rem;
+    }
+
+    /* Voice toggle */
+    #voice-toggle {
+      margin: .8rem 1.2rem;
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: .6rem;
+      font-family: var(--font-mono);
+      font-size: .65rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      cursor: pointer;
+      transition: all .2s;
+      width: calc(100% - 2.4rem);
+      display: flex; align-items: center; justify-content: center; gap: .5rem;
+    }
+    #voice-toggle.on {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: rgba(200,255,0,.06);
+    }
+
+    /* ── MOBILE ── */
+    @media (max-width: 768px) {
+      #app.active { grid-template-columns: 1fr; grid-template-rows: 48px 1fr auto; }
+      .left-panel, .right-panel { display: none; }
+      .camera-wrap { grid-row: 2; }
+      #mobile-hud {
+        display: flex !important;
+        background: var(--surface);
+        border-top: 1px solid var(--border);
+        padding: 1rem;
+        gap: 1rem;
+        align-items: center;
+        justify-content: space-around;
+      }
+    }
+    #mobile-hud { display: none; }
+    .m-rep { font-family: var(--font-display); font-size: 2.5rem; color: var(--accent); line-height: 1; }
+    .m-lbl { font-family: var(--font-mono); font-size: .55rem; color: var(--muted); text-transform: uppercase; }
+    .m-ex-btns { display: flex; gap: .5rem; }
+    .m-ex-btn {
+      background: var(--card); border: 1px solid var(--border);
+      color: var(--muted); padding: .4rem .7rem;
+      font-family: var(--font-mono); font-size: .6rem; cursor: pointer;
+    }
+    .m-ex-btn.active { border-color: var(--accent); color: var(--accent); }
+  </style>
+</head>
+<body>
+
+<!-- SPLASH -->
+<div id="splash">
+  <div class="splash-logo">FITNESS<br>BUDDY</div>
+  <div class="splash-sub">Browser-based · Real-time · Private</div>
+  <div class="splash-features">
+    <div class="splash-feat"><span>💪</span>Bicep Curls</div>
+    <div class="splash-feat"><span>🏋️</span>Squats</div>
+    <div class="splash-feat"><span>👊</span>Push-ups</div>
+    <div class="splash-feat"><span>🎙️</span>Voice Coach</div>
+    <div class="splash-feat"><span>⚠️</span>Form Alerts</div>
+    <div class="splash-feat"><span>🔒</span>100% Private</div>
+  </div>
+  <button class="splash-btn" onclick="startApp()">▶ START WORKOUT</button>
+  <div class="splash-sub" style="font-size:.6rem;margin-top:.5rem">Camera permission required · Works best on desktop</div>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <!-- TOP BAR -->
+  <div class="topbar">
+    <div class="topbar-logo">FITNESS BUDDY</div>
+    <div class="topbar-center">
+      <div class="live-dot"></div>
+      <span class="live-label">Live</span>
+      <span id="timer">00:00</span>
+    </div>
+    <div class="topbar-right">
+      <span id="fps-display">-- fps</span>
+    </div>
+  </div>
+
+  <!-- LEFT PANEL -->
+  <div class="left-panel">
+    <div class="panel-section">
+      <div class="panel-label">Exercise</div>
+      <div class="exercise-btns">
+        <button class="ex-btn active" onclick="setExercise('curl')" id="btn-curl">
+          <span class="ex-icon">💪</span> BICEP CURL
+        </button>
+        <button class="ex-btn" onclick="setExercise('squat')" id="btn-squat">
+          <span class="ex-icon">🏋️</span> SQUAT
+        </button>
+        <button class="ex-btn" onclick="setExercise('pushup')" id="btn-pushup">
+          <span class="ex-icon">👊</span> PUSH-UP
+        </button>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <div class="panel-label">Reps</div>
+      <div class="rep-display">
+        <span class="rep-number" id="rep-count">0</span>
+        <span class="rep-unit">completed</span>
+      </div>
+      <div class="stage-display">
+        <div class="stage-pill active" id="stage-down">DOWN</div>
+        <div class="stage-pill" id="stage-up">UP</div>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <div class="panel-label">Joint Angles</div>
+      <div class="angle-meters">
+        <div class="angle-row">
+          <span class="angle-name" id="angle1-name">ELBOW</span>
+          <div class="angle-bar-wrap"><div class="angle-bar" id="angle1-bar"></div></div>
+          <span class="angle-val" id="angle1-val">--°</span>
+        </div>
+        <div class="angle-row">
+          <span class="angle-name" id="angle2-name">BODY</span>
+          <div class="angle-bar-wrap"><div class="angle-bar" id="angle2-bar"></div></div>
+          <span class="angle-val" id="angle2-val">--°</span>
+        </div>
+      </div>
+    </div>
+
+    <button class="reset-btn" onclick="resetReps()">↺ Reset Reps</button>
+
+    <div style="flex:1"></div>
+    <div style="padding:.8rem 1.2rem; border-top:1px solid var(--border)">
+      <div class="panel-label" style="margin-bottom:.4rem">Keys</div>
+      <div style="font-family:var(--font-mono);font-size:.6rem;color:var(--muted);line-height:1.8">
+        <b style="color:var(--text)">D</b> → Next exercise<br>
+        <b style="color:var(--text)">A</b> → Prev exercise<br>
+        <b style="color:var(--text)">R</b> → Reset reps<br>
+        <b style="color:var(--text)">V</b> → Toggle voice
+      </div>
+    </div>
+  </div>
+
+  <!-- CAMERA -->
+  <div class="camera-wrap">
+    <video id="video" playsinline></video>
+    <canvas id="canvas"></canvas>
+    <div id="cam-loading">
+      <div class="loading-ring"></div>
+      <p>Initializing camera...</p>
+    </div>
+    <div id="alert-overlay"></div>
+    <div id="rep-flash"></div>
+  </div>
+
+  <!-- RIGHT PANEL -->
+  <div class="right-panel">
+    <div class="panel-section">
+      <div class="panel-label">Session</div>
+    </div>
+    <div class="stat-block">
+      <span class="stat-big" id="total-reps">0</span>
+      <span class="stat-lbl">Total Reps</span>
+    </div>
+    <div class="stat-block">
+      <span class="stat-big" id="curl-reps">0</span>
+      <span class="stat-lbl">Curl Reps</span>
+    </div>
+    <div class="stat-block">
+      <span class="stat-big" id="squat-reps">0</span>
+      <span class="stat-lbl">Squat Reps</span>
+    </div>
+    <div class="stat-block">
+      <span class="stat-big" id="pushup-reps">0</span>
+      <span class="stat-lbl">Push-up Reps</span>
+    </div>
+
+    <div class="panel-section" style="margin-top:.5rem">
+      <div class="panel-label">Form Rules</div>
+    </div>
+    <div class="rules-list" id="rules-list"></div>
+
+    <div class="panel-section">
+      <div class="panel-label">Camera Tips</div>
+    </div>
+    <div class="tips" id="tips-list"></div>
+
+    <button id="voice-toggle" class="on" onclick="toggleVoice()">🔊 Voice On</button>
+  </div>
+
+  <!-- MOBILE HUD -->
+  <div id="mobile-hud">
+    <div>
+      <div class="m-rep" id="m-rep-count">0</div>
+      <div class="m-lbl">Reps</div>
+    </div>
+    <div class="m-ex-btns">
+      <button class="m-ex-btn active" onclick="setExercise('curl')" id="m-btn-curl">💪</button>
+      <button class="m-ex-btn" onclick="setExercise('squat')" id="m-btn-squat">🏋️</button>
+      <button class="m-ex-btn" onclick="setExercise('pushup')" id="m-btn-pushup">👊</button>
+    </div>
+    <button class="reset-btn" style="width:auto;margin:0;padding:.4rem .8rem" onclick="resetReps()">↺</button>
+  </div>
+</div>
+
+<script>
+// ── STATE ──
+const state = {
+  exercise: 'curl',
+  stage: 'down',
+  reps: { curl: 0, squat: 0, pushup: 0 },
+  voiceOn: true,
+  sessionStart: null,
+  lastSpeak: 0,
+  lastAlert: '',
+  lastAlertTime: 0,
+  fpsArr: [],
+  lastFrame: 0,
+};
+
+// ── EXERCISE CONFIG ──
+const EXERCISES = {
+  curl: {
+    name: 'BICEP CURL',
+    rules: [
+      { type: 'ok', text: 'Elbow > 155° = fully extended' },
+      { type: 'ok', text: 'Elbow < 45° = full curl counted' },
+      { type: 'warn', text: 'Elbow drift > 12% → "Keep elbow tucked!"' },
+      { type: 'warn', text: 'Incomplete extension → "Fully extend!"' },
+    ],
+    tips: ['Face camera directly', 'Stand 6–8 feet back', 'Good lighting helps'],
+    angle1Name: 'ELBOW',
+    angle2Name: 'SHOULDER',
+  },
+  squat: {
+    name: 'SQUAT',
+    rules: [
+      { type: 'ok', text: 'Knee > 160° = standing' },
+      { type: 'ok', text: 'Knee < 90° = full depth counted' },
+      { type: 'warn', text: 'Knee past ankle → "Push hips back!"' },
+      { type: 'warn', text: 'Back lean < 55° → "Chest up!"' },
+    ],
+    tips: ['Camera at hip height', 'Slightly to the side', 'Full body visible'],
+    angle1Name: 'KNEE',
+    angle2Name: 'HIP',
+  },
+  pushup: {
+    name: 'PUSH-UP',
+    rules: [
+      { type: 'ok', text: 'Elbow > 155° = top (lockout)' },
+      { type: 'ok', text: 'Elbow < 90° = bottom counted' },
+      { type: 'warn', text: 'Body angle < 155° → "Don\'t sag hips!"' },
+      { type: 'warn', text: 'No lockout → "Lock arms at top!"' },
+    ],
+    tips: ['Camera to the side', 'Full body in frame', 'Parallel to floor'],
+    angle1Name: 'ELBOW',
+    angle2Name: 'BODY',
+  },
+};
+
+// ── DOM ──
+const repCountEl = document.getElementById('rep-count');
+const mRepCountEl = document.getElementById('m-rep-count');
+const totalRepsEl = document.getElementById('total-reps');
+const curlRepsEl = document.getElementById('curl-reps');
+const squatRepsEl = document.getElementById('squat-reps');
+const pushupRepsEl = document.getElementById('pushup-reps');
+const stageDownEl = document.getElementById('stage-down');
+const stageUpEl = document.getElementById('stage-up');
+const angle1NameEl = document.getElementById('angle1-name');
+const angle2NameEl = document.getElementById('angle2-name');
+const angle1BarEl = document.getElementById('angle1-bar');
+const angle2BarEl = document.getElementById('angle2-bar');
+const angle1ValEl = document.getElementById('angle1-val');
+const angle2ValEl = document.getElementById('angle2-val');
+const alertOverlay = document.getElementById('alert-overlay');
+const repFlashEl = document.getElementById('rep-flash');
+const timerEl = document.getElementById('timer');
+const fpsEl = document.getElementById('fps-display');
+const camLoadingEl = document.getElementById('cam-loading');
+const rulesList = document.getElementById('rules-list');
+const tipsList = document.getElementById('tips-list');
+const voiceBtn = document.getElementById('voice-toggle');
+const videoEl = document.getElementById('video');
+const canvasEl = document.getElementById('canvas');
+const ctx = canvasEl.getContext('2d');
+
+// ── ANGLE MATH ──
+function calcAngle(A, B, C) {
+  const BAx = A.x - B.x, BAy = A.y - B.y;
+  const BCx = C.x - B.x, BCy = C.y - B.y;
+  const dot = BAx * BCx + BAy * BCy;
+  const magBA = Math.sqrt(BAx * BAx + BAy * BAy);
+  const magBC = Math.sqrt(BCx * BCx + BCy * BCy);
+  if (magBA === 0 || magBC === 0) return 0;
+  const cos = Math.min(1, Math.max(-1, dot / (magBA * magBC)));
+  return Math.round(Math.acos(cos) * (180 / Math.PI));
+}
+
+// ── MEDIAPIPE LANDMARKS (indices) ──
+// 11=L_shoulder, 12=R_shoulder, 13=L_elbow, 14=R_elbow
+// 15=L_wrist, 16=R_wrist, 23=L_hip, 24=R_hip
+// 25=L_knee, 26=R_knee, 27=L_ankle, 28=R_ankle
+
+function getLM(lms, idx) {
+  const l = lms[idx];
+  return { x: l.x, y: l.y, z: l.z, v: l.visibility };
+}
+
+// ── EXERCISE LOGIC ──
+function processCurl(lms, frameW) {
+  const shoulder = getLM(lms, 11);
+  const elbow = getLM(lms, 13);
+  const wrist = getLM(lms, 15);
+  if (shoulder.v < 0.5 || elbow.v < 0.5 || wrist.v < 0.5) return null;
+
+  const elbowAngle = calcAngle(shoulder, elbow, wrist);
+
+  // Elbow drift check (x position vs shoulder x)
+  const elbowDrift = Math.abs(elbow.x - shoulder.x);
+  let alert = '';
+  if (elbowDrift > 0.12 && elbowAngle < 120) alert = '⚠ Keep elbow tucked!';
+  if (state.stage === 'up' && elbowAngle > 155) alert = '⚠ Fully extend your arm!';
+
+  // Count logic
+  if (elbowAngle > 155 && state.stage === 'up') {
+    state.stage = 'down';
+  }
+  if (elbowAngle < 45 && state.stage === 'down') {
+    state.stage = 'up';
+    countRep();
+  }
+
+  return { angle1: elbowAngle, angle2: null, alert };
+}
+
+function processSquat(lms) {
+  const hip = getLM(lms, 23);
+  const knee = getLM(lms, 25);
+  const ankle = getLM(lms, 27);
+  const shoulder = getLM(lms, 11);
+  if (hip.v < 0.5 || knee.v < 0.5 || ankle.v < 0.5) return null;
+
+  const kneeAngle = calcAngle(hip, knee, ankle);
+  const hipAngle = calcAngle(shoulder, hip, knee);
+
+  let alert = '';
+  if (knee.x > ankle.x + 0.07) alert = '⚠ Push hips back!';
+  if (hipAngle < 55 && kneeAngle < 120) alert = '⚠ Chest up!';
+
+  if (kneeAngle > 160 && state.stage === 'up') {
+    state.stage = 'down';
+  }
+  if (kneeAngle < 90 && state.stage === 'down') {
+    state.stage = 'up';
+    countRep();
+  }
+
+  return { angle1: kneeAngle, angle2: hipAngle, alert };
+}
+
+function processPushup(lms) {
+  const shoulder = getLM(lms, 11);
+  const elbow = getLM(lms, 13);
+  const wrist = getLM(lms, 15);
+  const hip = getLM(lms, 23);
+  const ankle = getLM(lms, 27);
+  if (shoulder.v < 0.5 || elbow.v < 0.5 || wrist.v < 0.5) return null;
+
+  const elbowAngle = calcAngle(shoulder, elbow, wrist);
+  const bodyAngle = calcAngle(shoulder, hip, ankle);
+
+  let alert = '';
+  if (bodyAngle < 155 && elbowAngle < 120) alert = "⚠ Don't sag your hips!";
+  if (state.stage === 'up' && elbowAngle < 160) alert = '⚠ Lock your arms at the top!';
+
+  if (elbowAngle > 155 && state.stage === 'up') {
+    state.stage = 'down';
+  }
+  if (elbowAngle < 90 && state.stage === 'down') {
+    state.stage = 'up';
+    countRep();
+  }
+
+  return { angle1: elbowAngle, angle2: bodyAngle, alert };
+}
+
+// ── COUNT REP ──
+function countRep() {
+  state.reps[state.exercise]++;
+  updateRepUI();
+
+  // Flash
+  repFlashEl.textContent = state.reps[state.exercise];
+  repFlashEl.classList.remove('flash');
+  void repFlashEl.offsetWidth;
+  repFlashEl.classList.add('flash');
+
+  // Voice
+  if (state.voiceOn) {
+    const n = state.reps[state.exercise];
+    speak(String(n));
+    if (n % 5 === 0) setTimeout(() => speak(`${n} reps! Keep going!`), 600);
+  }
+}
+
+function updateRepUI() {
+  const n = state.reps[state.exercise];
+  repCountEl.textContent = n;
+  mRepCountEl.textContent = n;
+  curlRepsEl.textContent = state.reps.curl;
+  squatRepsEl.textContent = state.reps.squat;
+  pushupRepsEl.textContent = state.reps.pushup;
+  totalRepsEl.textContent = state.reps.curl + state.reps.squat + state.reps.pushup;
+}
+
+// ── ALERTS ──
+let alertTimeout = null;
+function showAlert(msg) {
+  if (msg === state.lastAlert && Date.now() - state.lastAlertTime < 3000) return;
+  state.lastAlert = msg;
+  state.lastAlertTime = Date.now();
+
+  alertOverlay.innerHTML = `<div class="alert-pill">${msg}</div>`;
+  if (alertTimeout) clearTimeout(alertTimeout);
+  alertTimeout = setTimeout(() => { alertOverlay.innerHTML = ''; }, 3000);
+
+  if (state.voiceOn && Date.now() - state.lastSpeak > 4000) {
+    speak(msg.replace('⚠ ', ''));
+    state.lastSpeak = Date.now();
+  }
+}
+
+// ── VOICE ──
+function speak(text) {
+  if (!state.voiceOn || !window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.rate = 1.1; u.pitch = 1; u.volume = 0.9;
+  window.speechSynthesis.speak(u);
+}
+
+function toggleVoice() {
+  state.voiceOn = !state.voiceOn;
+  voiceBtn.textContent = state.voiceOn ? '🔊 Voice On' : '🔇 Voice Off';
+  voiceBtn.className = state.voiceOn ? 'on' : '';
+  // Update button style
+  voiceBtn.style.borderColor = state.voiceOn ? 'var(--accent)' : '';
+  voiceBtn.style.color = state.voiceOn ? 'var(--accent)' : '';
+  voiceBtn.style.background = state.voiceOn ? 'rgba(200,255,0,.06)' : '';
+}
+
+// ── EXERCISE SWITCH ──
+function setExercise(ex) {
+  state.exercise = ex;
+  state.stage = 'down';
+  ['curl', 'squat', 'pushup'].forEach(e => {
+    document.getElementById(`btn-${e}`).classList.toggle('active', e === ex);
+    const mb = document.getElementById(`m-btn-${e}`);
+    if (mb) mb.classList.toggle('active', e === ex);
+  });
+  updateRulesAndTips();
+  updateAngleNames();
+  repCountEl.textContent = state.reps[ex];
+  mRepCountEl.textContent = state.reps[ex];
+  alertOverlay.innerHTML = '';
+}
+
+function updateRulesAndTips() {
+  const cfg = EXERCISES[state.exercise];
+  rulesList.innerHTML = cfg.rules.map(r =>
+    `<div class="rule-item"><span class="${r.type === 'ok' ? 'rule-ok' : 'rule-warn'}">${r.type === 'ok' ? '✅' : '⚠️'}</span>${r.text}</div>`
+  ).join('');
+  tipsList.innerHTML = cfg.tips.map(t =>
+    `<div class="tip-item"><span>📷</span>${t}</div>`
+  ).join('');
+}
+
+function updateAngleNames() {
+  const cfg = EXERCISES[state.exercise];
+  angle1NameEl.textContent = cfg.angle1Name;
+  angle2NameEl.textContent = cfg.angle2Name;
+}
+
+function resetReps() {
+  state.reps[state.exercise] = 0;
+  state.stage = 'down';
+  updateRepUI();
+}
+
+// ── STAGE UI ──
+function updateStageUI() {
+  stageDownEl.classList.toggle('active', state.stage === 'down');
+  stageUpEl.classList.toggle('active', state.stage === 'up');
+}
+
+// ── ANGLE UI ──
+function updateAngleUI(a1, a2) {
+  if (a1 !== null && a1 !== undefined) {
+    angle1ValEl.textContent = a1 + '°';
+    angle1BarEl.style.width = Math.min(100, (a1 / 180) * 100) + '%';
+  } else {
+    angle1ValEl.textContent = '--°';
+    angle1BarEl.style.width = '0%';
+  }
+  if (a2 !== null && a2 !== undefined) {
+    angle2ValEl.textContent = a2 + '°';
+    angle2BarEl.style.width = Math.min(100, (a2 / 180) * 100) + '%';
+  } else {
+    angle2ValEl.textContent = '--°';
+    angle2BarEl.style.width = '0%';
+  }
+}
+
+// ── TIMER ──
+function updateTimer() {
+  if (!state.sessionStart) return;
+  const elapsed = Math.floor((Date.now() - state.sessionStart) / 1000);
+  const m = String(Math.floor(elapsed / 60)).padStart(2, '0');
+  const s = String(elapsed % 60).padStart(2, '0');
+  timerEl.textContent = `${m}:${s}`;
+}
+setInterval(updateTimer, 1000);
+
+// ── FPS ──
+function trackFPS(now) {
+  state.fpsArr.push(now);
+  state.fpsArr = state.fpsArr.filter(t => now - t < 1000);
+  fpsEl.textContent = state.fpsArr.length + ' fps';
+}
+
+// ── POSE CALLBACK ──
+function onResults(results) {
+  canvasEl.width = results.image.width;
+  canvasEl.height = results.image.height;
+  ctx.save();
+  ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
+  ctx.drawImage(results.image, 0, 0);
+
+  if (results.poseLandmarks) {
+    // Draw skeleton
+    drawConnectors(ctx, results.poseLandmarks, POSE_CONNECTIONS, {
+      color: 'rgba(200,255,0,0.6)', lineWidth: 2
+    });
+    drawLandmarks(ctx, results.poseLandmarks, {
+      color: '#c8ff00', fillColor: 'rgba(0,0,0,0.8)', lineWidth: 1, radius: 4
+    });
+
+    // Process exercise
+    let result = null;
+    if (state.exercise === 'curl') result = processCurl(results.poseLandmarks, canvasEl.width);
+    else if (state.exercise === 'squat') result = processSquat(results.poseLandmarks);
+    else if (state.exercise === 'pushup') result = processPushup(results.poseLandmarks);
+
+    if (result) {
+      updateAngleUI(result.angle1, result.angle2);
+      if (result.alert) showAlert(result.alert);
+      updateStageUI();
+    }
+
+    // Draw exercise name overlay
+    ctx.font = 'bold 18px "Space Mono"';
+    ctx.fillStyle = 'rgba(200,255,0,0.9)';
+    ctx.fillText(EXERCISES[state.exercise].name, 16, 32);
+
+    // Draw rep count overlay
+    ctx.font = 'bold 48px "Black Han Sans"';
+    ctx.fillStyle = 'rgba(200,255,0,0.9)';
+    ctx.fillText(state.reps[state.exercise], 16, 80);
+  }
+
+  ctx.restore();
+  trackFPS(performance.now());
+}
+
+// ── INIT MEDIAPIPE + CAMERA ──
+async function startApp() {
+  document.getElementById('splash').classList.add('hidden');
+  document.getElementById('app').classList.add('active');
+  state.sessionStart = Date.now();
+  updateRulesAndTips();
+  updateAngleNames();
+
+  const pose = new Pose({
+    locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
+  });
+
+  pose.setOptions({
+    modelComplexity: 1,
+    smoothLandmarks: true,
+    enableSegmentation: false,
+    smoothSegmentation: false,
+    minDetectionConfidence: 0.5,
+    minTrackingConfidence: 0.5
+  });
+
+  pose.onResults(onResults);
+
+  const camera = new Camera(videoEl, {
+    onFrame: async () => {
+      await pose.send({ image: videoEl });
+    },
+    width: 1280,
+    height: 720
+  });
+
+  try {
+    await camera.start();
+    camLoadingEl.style.display = 'none';
+    speak('Camera ready. Let\'s work out!');
+  } catch (e) {
+    camLoadingEl.innerHTML = `
+      <div style="font-family:var(--font-mono);font-size:.8rem;color:var(--danger);text-align:center;padding:2rem">
+        ❌ Camera access denied<br><br>
+        <span style="color:var(--muted);font-size:.65rem">Please allow camera permission<br>and refresh the page</span>
+      </div>`;
+  }
+}
+
+// ── KEYBOARD ──
+document.addEventListener('keydown', e => {
+  const exercises = ['curl', 'squat', 'pushup'];
+  const idx = exercises.indexOf(state.exercise);
+  if (e.key === 'd' || e.key === 'D') setExercise(exercises[(idx + 1) % 3]);
+  if (e.key === 'a' || e.key === 'A') setExercise(exercises[(idx + 2) % 3]);
+  if (e.key === 'r' || e.key === 'R') resetReps();
+  if (e.key === 'v' || e.key === 'V') toggleVoice();
+});
+
+// Init UI
+updateRulesAndTips();
+updateAngleNames();
+</script>
+</body>
+</html>
